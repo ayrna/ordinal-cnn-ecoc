@@ -176,10 +176,9 @@ def determinism(seed):
 
 @FlowProject.label
 def results_saved(job):
-    return ('preaug_results' in job.doc.keys()) and \
-           ('confusion_matrix' in job.doc['preaug_results'].keys()) and \
-           ('result_metrics' in job.doc['preaug_results'].keys()) and \
-           ('result_metrics_per_class' in job.doc['preaug_results'].keys())
+    return ('confusion_matrix' in job.doc.keys()) and \
+           ('result_metrics' in job.doc.keys()) and \
+           ('result_metrics_per_class' in job.doc.keys())
 
 
 def evaluation_metrics(ytrue, ypred, probas):
@@ -244,7 +243,7 @@ def split_train_validation(job):
 @experiment
 @FlowProject.operation.with_directives({'ngpu': 1, 'np': 3})  # type: ignore
 @FlowProject.pre.after(split_train_validation)  # type: ignore
-@FlowProject.post.isfile('trained_state_preaug.pt')  # type: ignore
+@FlowProject.post.isfile('trained_state.pt')  # type: ignore
 def train_model(job):
     determinism(job.sp.seed)
     device = torch.device('cuda:0')
@@ -274,19 +273,19 @@ def train_model(job):
         history.append(epoch)
         if last_plot is not None:
             last_plot.wait()
-        last_plot = async_pool.apply_async(plot_history, (job, history, 'training_preaug.png'))
+        last_plot = async_pool.apply_async(plot_history, (job, history, 'training.png'))
     last_plot.wait()  # type: ignore
     end_time = time.time()
     elapsed = end_time - begin_time
     print(f'Ran for {len(history)} epochs. Elapsed time: {timedelta(seconds=elapsed)} (avg {timedelta(seconds=elapsed/len(history))} per epoch)')
-    job.doc['train_full_network_elapsed_seconds'] = elapsed
+    job.doc['train_network_elapsed_seconds'] = elapsed
 
     with job.stores.training_data as d:
-        d['train_loss/pre_augment'] = np.array([e['train_loss'] for e in history])
-        d['val_loss/pre_augment'] = np.array([e['val_loss'] for e in history])
-        d['train_time/pre_augment'] = np.array([e['train_time'] for e in history])
-        d['val_time/pre_augment'] = np.array([e['val_time'] for e in history])
-    torch.save(net.state_dict(), job.fn(f'trained_state_preaug.pt'))
+        d['train_loss'] = np.array([e['train_loss'] for e in history])
+        d['val_loss'] = np.array([e['val_loss'] for e in history])
+        d['train_time'] = np.array([e['train_time'] for e in history])
+        d['val_time'] = np.array([e['val_time'] for e in history])
+    torch.save(net.state_dict(), job.fn(f'trained_state.pt'))
 
 
 @experiment
@@ -305,16 +304,17 @@ def evaluate_trained_model(job):
     net, _, _ = training_components(**{p: v for p, v in job.sp.items()
                                        if p in signature(training_components).parameters},
                                     n_classes=job.doc.n_classes, device=device)
-    net.load_state_dict(torch.load(job.fn(f'trained_state_preaug.pt'), map_location=device))
+    net.load_state_dict(torch.load(job.fn(f'trained_state.pt'), map_location=device))
     results = evaluate_model(net, test_ds, device)
-    job.doc['preaug_results'] = results
+    for k, v in results:
+        job.doc[k] = v
 
     confusion_matrix = np.array(results['confusion_matrix'])
     weighted_confusion_matrix = confusion_matrix / confusion_matrix.sum(axis=1)[:, None]
     cmd = ConfusionMatrixDisplay(weighted_confusion_matrix)
     fig, ax = plt.subplots()
     cmd.plot(ax=ax)
-    fig.savefig(job.fn('preaug_confusion_matrix.png'))
+    fig.savefig(job.fn('confusion_matrix.png'))
 
 
 def evaluate_model(net: ExperimentModel, test_ds: tdata.Dataset, device: torch.device) -> dict:
