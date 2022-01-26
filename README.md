@@ -30,11 +30,30 @@ Once finished, activate the environment with the command:
 conda activate ordinal-cnn-ecoc
 ```
 
+### Preparing the data
+
+* [Diabetic Retinopathy dataset](https://www.kaggle.com/c/diabetic-retinopathy-detection/data):
+  * Download files train.zip.001-005 and decompress
+  * Download trainLabels.csv.zip and decompress
+  * Run the partitioning script as:
+  
+```
+python partition_retinopathy.py <path to trainLabels.csv> <path to train images folder> <path to folder to contain transformed images> <path to folder to contain all partitions>
+```
+* [Adience dataset](https://talhassner.github.io/home/projects/Adience/Adience-data.html):
+  * Download files fold_0_data.txt-fold_4_data.txt and place in a common folder
+  * Download aligned.tar.gz and decompress
+  * Run the partitioning script as:
+
+```
+python partition_adience.py <path to folder containing folds> <path to images folder> <path to folder to contain transformed images> <path to folder to contain all partitions>
+```
+
 ### Initializing the project
 
 First you should initialize all jobs to submit. Just run the [`init.py`](/init.py) script:
 ```bash
-python init.py
+python init.py <retinopathy_dataset_partitions_path> <adience_dataset_partitions_path>
 ```
 
 A `"workspace"` folder should have been created containing all project data, as well as other project related files.
